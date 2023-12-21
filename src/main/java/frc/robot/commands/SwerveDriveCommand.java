@@ -19,20 +19,18 @@ public class SwerveDriveCommand extends CommandBase {
                             DoubleSupplier getYSpeed, 
                             DoubleSupplier getRotationSpeed, 
                             SwerveDrive driveBase) {
-
     this.getXSpeed = getXSpeed; 
     this.getYSpeed = getYSpeed; 
     this.getRotationSpeed = getRotationSpeed; 
     this.driveBase = driveBase; 
     addRequirements(driveBase);
-    driveBase.resetDistance();
   }
 
   @Override
   public void execute() {
     driveBase.driveSpeed(getXSpeed.getAsDouble(), getYSpeed.getAsDouble(), getRotationSpeed.getAsDouble()*0.001, true);
 
-    SmartDashboard.putNumber("Drive/Distance", Units.metersToFeet( driveBase.getDistance() ));
+    //SmartDashboard.putNumber("Drive/Distance", Units.metersToFeet( driveBase.getDistance() ));
   }
 
   @Override

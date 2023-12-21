@@ -5,18 +5,10 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.Autos;
 import frc.robot.commands.SwerveDriveCommand;
 import frc.robot.subsystems.SwerveDrive;
-import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.CommandBase;
-import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.FunctionalCommand;
-import edu.wpi.first.wpilibj2.command.InstantCommand;
-import edu.wpi.first.wpilibj2.command.ParallelCommandGroup;
-import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -28,11 +20,10 @@ import edu.wpi.first.wpilibj2.command.button.Trigger;
  */
 public class RobotContainer {
   // The robot's subsystems and commands are defined here... 
-  private final SwerveDrive driveBase = new SwerveDrive(); 
+  private final SwerveDrive driveBase = new SwerveDrive(1, 2 * Math.PI, "geared", true, 0.0, true); 
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
   private final CommandXboxController driver = new CommandXboxController(OperatorConstants.DriverControllerPort);
-  private final CommandXboxController operator = new CommandXboxController(OperatorConstants.OperatorControllerPort);
  
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
@@ -58,21 +49,6 @@ public class RobotContainer {
    * PS4} controllers or {@link edu.wpi.first.wpilibj2.command.button.CommandJoystick Flight
    * joysticks}.
    */
-  // private enum InputType { Cube, Cone };
-  //private InputType inputType = InputType.Cone;
-  // private void setInputType(InputType type) {
-  //   inputType = type;
-  //   SmartDashboard.putBoolean("IntakeType/Cone", inputType == InputType.Cone);
-  //   SmartDashboard.putBoolean("IntakeType/Cube", inputType == InputType.Cube);
-  // } 
-
-  // private void toggleInputType() {
-  //   if (inputType == InputType.Cone)
-  //     setInputType(InputType.Cube);
-  //   else
-  //     setInputType(InputType.Cone);
-  // }
-
   private void configureBindings() {
     
   }
@@ -134,9 +110,6 @@ public class RobotContainer {
   public double getRotationSpeed(){ 
     double finalRotation;
 
-    // if (Math.abs(driver.getRightX()) <= 0.1)
-    //   finalRotation = Math.abs(operator.getRightX()) <= 0.1 ? 0.0 : operator.getRightX() * .5 / (1.0 + operator.getRightTriggerAxis());
-    // else
       finalRotation = driver.getRightX() * .5 / (1.0 + (4.0 * driver.getRightTriggerAxis()));
 
       if (Math.abs(finalRotation) < 0.1)

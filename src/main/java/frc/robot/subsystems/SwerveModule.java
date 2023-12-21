@@ -3,7 +3,7 @@
 // the WPILib BSD license file in the root directory of this project.
 package frc.robot.subsystems;
 
-//CTRE deps
+//CTRE dependencies
 import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.StatusFrameEnhanced;
@@ -11,146 +11,190 @@ import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
 import com.ctre.phoenix.sensors.CANCoder;
 import com.ctre.phoenix.sensors.CANCoderStatusFrame;
 
-//WPILIB deps
+//WPILIB dependencies
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.wpilibj.Preferences;
-import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.Constants;
 
-public class SwerveModule extends SubsystemBase {
-  private final WPI_TalonFX driveMotor; 
-  private final WPI_TalonFX steeringMotor; 
-  private final CANCoder steeringEncoder;
 
-  // Map ID to offset default values
-  private static double[] offsets = {0, 0, 0, 0};
-  private static final int ENCODER_BASE = Constants.SwerveBase.ROTATIONFRONTLEFT;
 
-  // The state machine has 3 states:
-  // BootState  check the SwerveDrive/Normalize then Normalize or Boot
-  // Normalize  normalize the wheels then move to ready
-  // Ready      the motors are ready to command
-  private enum NormalizeWheels {    
-    // This state can only be set by restarting the robot code.
-    BootState{
-      public NormalizeWheels execute(SwerveModule module) {
-        if (Preferences.getBoolean("SwervDrive/Normalize", false))
-          return Normalize;
+/* This class contains all variables and functions pertaining to a single Swerve Module. A 
+ * Swerve Module is a two motor device that allows a wheel's speed and angle to be commanded 
+ * separately. 
+ */
+public class SwerveModule extends SubsystemBase 
+  {
+    //A Swerve Module has a drive motor, a steering motor, and an encoder angle sensor
+    private final WPI_TalonFX driveMotor; 
+    private final WPI_TalonFX steeringMotor; 
+    private final CANCoder steeringEncoder;
 
-        return Ready;
-      };
-    },
-    // This state is entered only after boot when SwerveDrive/Normalize is true
-    Normalize{
-      public NormalizeWheels execute(SwerveModule module) {
-        module.NormalizeModule();
-        Preferences.setBoolean("SwervDrive/Normalize", false);
-        return Ready;
-      };
-    },
-    // This state is entered after normaizing or after boot if SwerveDrive/Normalize is false
-    Ready{
-      public NormalizeWheels execute(SwerveModule module){
-        return this;
-      };
-    };
-    public abstract NormalizeWheels execute(SwerveModule module);
+     double velocityMeters;
+     double ticksPerRotation; 
+     double velocitySensor;  
+    //A stored value of the previous distance the drive motor has traveled at any given time
+    private double distance = 0;
+    //A value to store the stop angle passed in from the Swerve Module constructor
+    private double stopAngle = 0;
+    private double gearRatio; 
+    //Offsets for the normalize feature of the Swerve Module are stored in an array with default values of 0 
+    private static double[] offsets = {0, 0, 0, 0};
+    /* 
+     * When applying the angle offset to a Swerve Module, it is necessary to increment through each 
+     * Swerve Module. By convention, the front left module is used as the first module.  
+    */
+    private static final int ENCODER_BASE = SwerveConstants.ROTATIONFRONTLEFT;
 
-    static {
-        Preferences.initBoolean("SwervDrive/Normalize", false);
-    };
-  };
+  /**
+   * Constructor for SwerveModule.
+   * 
+   * @param driveMotorID The CAN bus ID number of the drive motor of the Swerve Module
+   * @param steeringMotorID The CAN bus ID number of the steering motor of the Swerve Module
+   * @param steeringEncoderID The CAN bus ID number of the encoder angle sensor of the Swerve Module
+   * @param stopAngle An angle specified (in degrees) to point the steering motor when the Swerve 
+   * Module is not being commanded
+  */
+  public SwerveModule(int driveMotorID, int steeringMotorID, int steeringEncoderID, int stopAngle) 
+    {
+      //The drive motor is a CTRE Falcon 500 
+      driveMotor = new WPI_TalonFX(driveMotorID); 
+      //The steering motor is a CTRE Falcon 500
+      steeringMotor = new WPI_TalonFX(steeringMotorID); 
+      //The encoder angle sensor is a CTRE CANCoder 
+      steeringEncoder = new CANCoder(steeringEncoderID);
+      //Set the passed in stop angle's value to the subsystem stop angle 
+      this.stopAngle = stopAngle;
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_1_General, 253);//TODO: rethink if we need this speed, I don't think we do
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_2_Feedback0, 10);//This is key to odometry must be around same as code loop
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_3_Quadrature, 251);
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 241);
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_10_MotionMagic, 239);
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_13_Base_PIDF0, 233);
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_14_Turn_PIDF1, 229);
+      driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_15_FirmwareApiStatus, 255);
 
-  //Tell the wheel to stop controlling the sterring motor
-  private NormalizeWheels normalizeWheels = NormalizeWheels.BootState;
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_1_General, 240);//This packet is the motor output, limit switches, faults, we care about none of those
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_2_Feedback0, 10);//This is the sensor feedback, i.e. relative encoder
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_3_Quadrature, 251);
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 241);
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_10_MotionMagic, 239);
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_13_Base_PIDF0, 233);
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_14_Turn_PIDF1, 229);
+      steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_15_FirmwareApiStatus, 255);    
 
-  //I feel the constructor is pretty self-explanatory 
-  public SwerveModule(int driveMotorID, int steeringMotorID, int steeringEncoderID, int stopAngle) {
-    driveMotor = new WPI_TalonFX(driveMotorID); 
-    steeringMotor = new WPI_TalonFX(steeringMotorID); 
-    steeringEncoder = new CANCoder(steeringEncoderID);
+      steeringEncoder.setStatusFramePeriod(CANCoderStatusFrame.SensorData, 10);//The default on this is 10, but 20 might be better given our code loop rate
+      steeringEncoder.setStatusFramePeriod(CANCoderStatusFrame.VbatAndFaults, 255);
+
+      //Initialize preference to store steering motor offsets
+      String prefKey = String.format("SwerveModule/Offset_%02d", steeringMotorID);
+      Preferences.initDouble(prefKey, offsets[steeringMotorID-ENCODER_BASE]);
+      //Assign the stored offsets in Preferences to the swerve module
+      offsets[steeringMotorID-ENCODER_BASE] =  Preferences.getDouble(prefKey, offsets[steeringMotorID-ENCODER_BASE]);
+    } //End SwerveModule constructor
+  
     
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_1_General, 253);//TODO: rethink if we need this speed, I don't think we do
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_2_Feedback0, 10);//This is key to odometry must be around same as code loop
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_3_Quadrature, 251);
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 241);
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_10_MotionMagic, 239);
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_13_Base_PIDF0, 233);
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_14_Turn_PIDF1, 229);
-    driveMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_15_FirmwareApiStatus, 255);
+  //Converts sensor counts (ticks) to meters. Used for the drive motor.
+  private  final double ticksToMeter(double ticks) 
+    {
+      return (ticks / ticksPerRotation) * SwerveConstants.WHEEL_CIRCUMFERENCE;
+    }
 
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_1_General, 240);//This packet is the motor output, limit switches, faults, we care about none of those
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_2_Feedback0, 10);//This is the sensor feedback, i.e. relative encoder
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_3_Quadrature, 251);
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 241);
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_10_MotionMagic, 239);
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_13_Base_PIDF0, 233);
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_14_Turn_PIDF1, 229);
-    steeringMotor.setStatusFramePeriod(StatusFrameEnhanced.Status_15_FirmwareApiStatus, 255);    
+  /** 
+  * Returns the current velocity and rotation angle of the swerve module 
+  * (in meters per second and radians respectively) as a SwerveModuleState
+  */ 
+  public SwerveModuleState getState() 
+    { 
+      final double angle = getAngle() - offsets[steeringMotor.getDeviceID()-ENCODER_BASE];
+      return new SwerveModuleState(getVelocityMetersPerSecond(), Rotation2d.fromDegrees(angle)); 
+    } 
 
-    steeringEncoder.setStatusFramePeriod(CANCoderStatusFrame.SensorData, 10);//The default on this is 10, but 20 might be better given our code loop rate
-    steeringEncoder.setStatusFramePeriod(CANCoderStatusFrame.VbatAndFaults, 255);
-
-    String prefKey = String.format("SwerveModule/Offset_%02d", steeringMotorID);
-    Preferences.initDouble(prefKey, offsets[steeringMotorID-ENCODER_BASE]);
-    offsets[steeringMotorID-ENCODER_BASE] =  Preferences.getDouble(prefKey, offsets[steeringMotorID-ENCODER_BASE]);
-
-    getDistance();
-  } 
-  /** Returns the current velocity and rotation angle of the swerve module (in meters per second and 
-  radians respectively) */
-  public SwerveModuleState getState() { 
-    final double angle = getAngle() - offsets[steeringMotor.getDeviceID()-ENCODER_BASE] ;
-    return new SwerveModuleState(getVelocityMetersPerSecond(), Rotation2d.fromDegrees( angle )); 
-  } 
-
-  public SwerveModulePosition getSwerveModulePosition(){ 
-    final double absolute = getAngle(); 
-    double angle = absolute - offsets[steeringMotor.getDeviceID()-ENCODER_BASE];
-    return new SwerveModulePosition(Constants.SwerveBase.ticksToMeter(driveMotor.getSelectedSensorPosition()), Rotation2d.fromDegrees(angle)); 
-  }
-  /** Allows us to command the swervemodule to any given veloctiy and angle, ultimately coming from our
-  joystick inputs. */
-  public void setDesiredState(SwerveModuleState desiredState, boolean parkingbrake) {
-      normalizeWheels = normalizeWheels.execute(this);
-      if (normalizeWheels != NormalizeWheels.Ready)
-        return;
-
-      // SwerveModuleState state = SwerveModuleState.optimize(desiredState, new Rotation2d(getAngleNormalized())); 
+  /** 
+   * Returns the current angle of the encoder angle sensor (in radians) and the total distance traveled 
+   * by the drive motor (in meters) as a SwerveModulePosition data type. The date provided by this function
+   * is used for wheel odometry.
+  */
+  public SwerveModulePosition getSwerveModulePosition()
+    { 
+      final double absolute = getAngle(); 
+      double angle = absolute - offsets[steeringMotor.getDeviceID()-ENCODER_BASE];
+      return new SwerveModulePosition(ticksToMeter(driveMotor.getSelectedSensorPosition()), Rotation2d.fromDegrees(angle)); 
+    }
+   
+  /**
+   * Allows for the Swerve Module to be commanded to any given veloctiy and angle and specifies 
+   * if the wheels should use their stop angles
+   * @param desiredState The state (speed and angle) to command the module to as SwerveModuleState data type
+   * @param useStopAngle Boolean whether or not to command the wheels to their individual stop angles (useful 
+   * for avoiding being pushed or to return the wheels to a neutral state when not commanded)
+   * 
+   */ 
+  public void setDesiredState(SwerveModuleState desiredState, boolean useStopAngle) 
+    {
+      //Assign this internal SwerveModule state value the value of the desired state
       SwerveModuleState state = desiredState;      
-       /*We need this value back in sensor units/100ms to command the falcon drive motor Note: I do not know
-       why the two doubles below need to have 'final' access modifiers*/
-       //final double driveOutput =  state.speedMetersPerSecond / velocityMeters;
-       //We are using speedMetersPerSecond as a percent voltage value from -1 to 1 
-       double driveSpeed = state.speedMetersPerSecond *Constants.SwerveBase.VELOCITYSENSOR; 
-
-      //  final double normalized = getAngleNormalized();
-      final double absolute = getAngle();
-      double delta = AngleDelta( absolute - offsets[steeringMotor.getDeviceID()-ENCODER_BASE], state.angle.getDegrees() );
-
-      //This is our optimize function
-      if (delta > 90.0) {
-        delta -= 180.0 ;
-        driveSpeed *= -1;
-      } else if (delta < -90.0){
-        delta += 180.0 ;
-        driveSpeed *= -1;
-      } 
-      
+       /*  
+        * This value is needed back in sensor units/100ms to command the falcon drive motor.
+        * speedMetersPerSecond is used as a percent voltage value from -1 to 1 
+       */
+      double driveSpeed = state.speedMetersPerSecond * velocitySensor;
+      //The raw, unormalized value of the encoder angle sensor
+      final double absolute = getAngle(); 
+      /* 
+       * Get the difference between the commanded angle 
+       * and the reported angle (normalized by the recorded offset value)
+       * as a modulo-360 degree number. The encoder angles sensor used by the robot returns a double 
+       * that wraps to what is effectively +- infinity, but internal fucntionality requires that this 
+       * number be with a 0-360 degree range. 
+      */ 
+      double delta = AngleDelta( 
+      absolute - offsets[steeringMotor.getDeviceID()-ENCODER_BASE], //Subtract the raw value from the recorded offset for the given swerve module
+      state.angle.getDegrees()); //This is the angle protion (in degrees) of the desiredState SwerveModuleSate 
+      /*
+       * If the difference between the normalized current angle and the commanded angle is greater than 
+       * 90 degrees, command the steering motor to stay at its current angle and invert the drive motor. This
+       * saves time and energy.
+      */
+      if (delta > 90.0) 
+        {
+          /* 
+           * Change delta to a mirrored version of whatever it was before, effectively commanding the
+           * steering motor to stay put.  
+          */ 
+          delta -= 180.0;
+          //Reverse the commanded speed to the drive motor
+          driveSpeed *= -1;
+        } 
+        /* Since delta could be negative, it is 
+         * necessary to cover the case where delta is less than or equal to -90 degrees. In effect, it is 
+         * the complementary case to the one above.
+        */
+        else if (delta < -90.0)
+        {//Possibly more useless code
+          /* 
+           * Change delta to a mirrored version of whatever it was before, effectively commanding the
+           * steering motor to stay put.  
+          */ 
+          delta += 180.0 ;
+          // Reverse the commanded speed to the drive motor
+          driveSpeed *= -1;
+        } 
       final double target = AngleToEncoder(absolute + delta);
-      
-      if(driveSpeed == 0.0){ 
-        // if (parkingbrake == true){ 
-        //   steeringMotor.set(ControlMode.MotionMagic, AngleToEncoder(-45)); 
-        // } else {
-        //   steeringMotor.set(ControlMode.PercentOutput, 0.0);
-        // }
-        driveMotor.set(ControlMode.PercentOutput, 0.0);   
-      } else {
+       if(driveSpeed == 0.0)
+      { 
+         if (useStopAngle == true)
+         { 
+           steeringMotor.set(ControlMode.MotionMagic, AngleToEncoder(stopAngle)); 
+         } 
+         else 
+         {
+           steeringMotor.set(ControlMode.PercentOutput, 0.0);
+         }
+         driveMotor.set(ControlMode.PercentOutput, 0.0);   
+      } else 
+      {
         steeringMotor.set(ControlMode.MotionMagic, -target); 
         //driveMotor.set(ControlMode.Velocity, driveSpeed);   
         driveMotor.set(ControlMode.PercentOutput, driveSpeed);
@@ -158,60 +202,121 @@ public class SwerveModule extends SubsystemBase {
        
   }
 
-  //A getter for the velocity of the drive motor, converted to meters per second.
-  public double getVelocityMetersPerSecond(){ 
-    return driveMotor.getSelectedSensorVelocity() * Constants.SwerveBase.VELOCITYMETERS;
+  /** 
+   * A getter for the velocity of the drive motor of the swerve module
+   * @return the velocity of the drive motor, converted to meters per second
+  */
+  public double getVelocityMetersPerSecond()
+  { 
+    return driveMotor.getSelectedSensorVelocity() * velocityMeters;
   } 
-
-  public double getAngle(){ 
+  /** 
+   * A getter for the angle of the steering motor of the swerve module.
+   * @return the current angle of the steering motor, in degrees with no normalization.
+   * NOTE: In order for this function to work correctly, CANCODERS must utilize "boot to absolute value"
+   * boot strategy and be set to range 0 to 360
+  */
+  public double getAngle()
+  { 
     return steeringEncoder.getPosition();
   } 
 
-  public double getAngleNormalized(){
-    return Math.IEEEremainder(steeringEncoder.getPosition(), 180.0);
-  } 
-
-  protected final static int ENCODER_COUNT = 4096;  
-  public static int AngleToEncoder(double deg){
-      return (int)((double)deg / 360.0 * (double)ENCODER_COUNT);
+  //Convert an angle in degrees to encoder counts (ticks) 
+  private static int AngleToEncoder(double deg)
+  {
+      return (int)((double)deg / 360.0 * (double)SwerveConstants.ENCODER_COUNT);
   }
 
-  public static double EncoderToAngle(int tick){
-      return tick / (double)ENCODER_COUNT * 360.0;
+  private static double AngleDelta(double current, double target)
+  {
+      if (current < 0)
+      {
+        current += 360.0;
+      } 
+      if (target < 0)
+      {
+        target += 360.0;
+      } 
+      double delta = target - current;
+      return Math.IEEEremainder(delta, 360);
   }
 
-  public static double AngleDelta(double current, double target){
-    if (current < 0) current += 360.0;
-    if (target < 0) target += 360.0;
-    double deltaPos = current - target;
-    double deltaNeg = target - current;
-    if (Math.abs(deltaPos) < Math.abs(deltaNeg))
-        return Math.IEEEremainder(deltaPos,360);
-    else
-        return Math.IEEEremainder(deltaNeg,360);
-  }
-
-  public void NormalizeModule() {
+public void normalizeModule() 
+{
+    System.out.println("Normalizing Modules...");
     offsets[steeringMotor.getDeviceID()-ENCODER_BASE] = getAngle();
     String prefKey = String.format("SwerveModule/Offset_%02d", steeringMotor.getDeviceID());
     Preferences.setDouble(prefKey, offsets[steeringMotor.getDeviceID()-ENCODER_BASE]);
-  }
-
-  public double distance ;
-  public double totalMeters = 0;
-  public double getDistance() {
-    double current = driveMotor.getSelectedSensorPosition() ;
-    // double current_alt = driveMotor.getSensorCollection().getIntegratedSensorPosition();
-    double delta = (current - distance);
-    distance = current;
-    return Constants.SwerveBase.ticksToMeter(delta);
-  } 
-
-  public void brakeMode(){ 
-    driveMotor.setNeutralMode(NeutralMode.Brake);
-  } 
-public void phaseSteeringMotor(){ 
-  steeringMotor.setSensorPhase(true);
 }
+
+/** 
+ * Determine how far the drive motor has turned in meters at any given time. 
+ * @return the instantaneous change in distance of the drive motor in meters
+ */ 
+public double getDistance() 
+    {  
+    // Determine the value of the current position of the drive motor
+    double current = driveMotor.getSelectedSensorPosition(); 
+    /* 
+     * Subtract the current position from the stored value for distance traveled to 
+     * get the difference between them for any given time. This should be the instantaneous distance
+     * traveled by the robot.
+    */
+    double delta = (current - distance); 
+    // Assign the current distance to the stored distance so that the stored distance is constantly updated  
+    distance = current; 
+    // Convert the instantaneous distance to meters from senor ticks (encoder counts)
+    return ticksToMeter(delta);
+    } 
+
+/**
+* Set the drive motor of the Swerve Module to brake mode. "Brake Mode" means the motor will actively 
+* fight against any attempts to turn the shaft while otherwise uncommanded using the back EMF 
+* (Electromotive Force) generated by turning the shaft. 
+*/ 
+public void brakeMode()
+  { 
+    driveMotor.setNeutralMode(NeutralMode.Brake);  
+  } 
+
+/** 
+ * Invert the steering motor by "phasing" it. Useful if the encoder and the motor are reporting  
+ * opposite values relative to each other. For example, if the encoder says that the motor is going
+ * counterclockwise when the motor is being commanded clockwise, then the motor and encoder are 
+ * "out of phase". Employing this method should correct the issue. 
+*/  
+  public void phaseSteeringMotor()
+    { 
+      steeringMotor.setSensorPhase(true);
+    }
+/**
+ * Congfigure any constants that vary based on swerve module used. 
+ * @param moduleType A String name representing the module being used.
+ */
+  public void setGearRatioDependentConstants(String moduleType)
+  {
+    switch(moduleType)
+    {
+      case "geared":
+      gearRatio = SwerveConstants.GEAR_RATIO_WCP_GEARED;
+      break; 
+      case "belted":
+      gearRatio = SwerveConstants.GEAR_RATIO_WCP_BELTED; 
+      break; 
+      default:
+      gearRatio = 0; 
+    }
+  // A simple conversion formula to turn encoder velocity (sensor units/100ms) to
+  // meters per second
+  velocityMeters = 1 / SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * SwerveConstants.WHEEL_CIRCUMFERENCE * 1
+  / gearRatio * SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
+
+  // A simple conversion formula to turn meters per second to encoder velocity
+  velocitySensor = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * 1 / SwerveConstants.WHEEL_CIRCUMFERENCE * gearRatio
+  * 1 / SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
+
+  //Converts wheel rotations of the drive motor to sensor counts (ticks)
+  ticksPerRotation = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * gearRatio;
+  } 
   
-}
+}//End class Swerve Module
