@@ -6,8 +6,6 @@ package frc.robot.commands;
 
 import java.util.function.DoubleSupplier;
 
-import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.CommandBase;
 import frc.robot.subsystems.SwerveDrive;
 
@@ -28,13 +26,11 @@ public class SwerveDriveCommand extends CommandBase {
 
   @Override
   public void execute() {
-    driveBase.driveSpeed(getXSpeed.getAsDouble(), getYSpeed.getAsDouble(), getRotationSpeed.getAsDouble()*0.001, true);
-
-    //SmartDashboard.putNumber("Drive/Distance", Units.metersToFeet( driveBase.getDistance() ));
+    driveBase.drive(getXSpeed.getAsDouble(), getYSpeed.getAsDouble(), getRotationSpeed.getAsDouble()*0.001, true);
   }
 
   @Override
   public void end(boolean interrupted) {
-    driveBase.drive(0.0, 0.0, 0.0);
+    driveBase.stop();
   }
 }

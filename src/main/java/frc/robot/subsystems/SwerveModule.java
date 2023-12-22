@@ -8,8 +8,10 @@ import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.StatusFrameEnhanced;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
+import com.ctre.phoenix.sensors.AbsoluteSensorRange;
 import com.ctre.phoenix.sensors.CANCoder;
 import com.ctre.phoenix.sensors.CANCoderStatusFrame;
+import com.ctre.phoenix.sensors.SensorInitializationStrategy;
 
 //WPILIB dependencies
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -34,8 +36,6 @@ public class SwerveModule extends SubsystemBase
      double velocityMeters;
      double ticksPerRotation; 
      double velocitySensor;  
-    //A stored value of the previous distance the drive motor has traveled at any given time
-    private double distance = 0;
     //A value to store the stop angle passed in from the Swerve Module constructor
     private double stopAngle = 0;
     private double gearRatio; 
@@ -172,62 +172,65 @@ public class SwerveModule extends SubsystemBase
          * the complementary case to the one above.
         */
         else if (delta < -90.0)
-        {//Possibly more useless code
-          /* 
-           * Change delta to a mirrored version of whatever it was before, effectively commanding the
-           * steering motor to stay put.  
-          */ 
-          delta += 180.0 ;
-          // Reverse the commanded speed to the drive motor
-          driveSpeed *= -1;
-        } 
+          {//Possibly more useless code
+            /* 
+             * Change delta to a mirrored version of whatever it was before, effectively commanding the
+             * steering motor to stay put.  
+            */ 
+            delta += 180.0 ;
+            // Reverse the commanded speed to the drive motor
+            driveSpeed *= -1;
+          } 
       final double target = AngleToEncoder(absolute + delta);
        if(driveSpeed == 0.0)
-      { 
-         if (useStopAngle == true)
-         { 
-           steeringMotor.set(ControlMode.MotionMagic, AngleToEncoder(stopAngle)); 
-         } 
-         else 
-         {
-           steeringMotor.set(ControlMode.PercentOutput, 0.0);
-         }
-         driveMotor.set(ControlMode.PercentOutput, 0.0);   
-      } else 
-      {
-        steeringMotor.set(ControlMode.MotionMagic, -target); 
-        //driveMotor.set(ControlMode.Velocity, driveSpeed);   
-        driveMotor.set(ControlMode.PercentOutput, driveSpeed);
-      }
+        { 
+          if (useStopAngle == true)
+            { 
+              steeringMotor.set(ControlMode.MotionMagic, AngleToEncoder(stopAngle)); 
+            } 
+          else 
+            {
+              steeringMotor.set(ControlMode.PercentOutput, 0.0);
+            }
+
+           driveMotor.set(ControlMode.PercentOutput, 0.0);
+
+        } 
+        else 
+          {
+            steeringMotor.set(ControlMode.MotionMagic, -target); 
+            //driveMotor.set(ControlMode.Velocity, driveSpeed);   
+            driveMotor.set(ControlMode.PercentOutput, driveSpeed);
+          }
        
   }
 
-  /** 
-   * A getter for the velocity of the drive motor of the swerve module
-   * @return the velocity of the drive motor, converted to meters per second
-  */
-  public double getVelocityMetersPerSecond()
+/** 
+ * A getter for the velocity of the drive motor of the swerve module
+ * @return the velocity of the drive motor, converted to meters per second
+*/
+public double getVelocityMetersPerSecond()
   { 
     return driveMotor.getSelectedSensorVelocity() * velocityMeters;
   } 
-  /** 
-   * A getter for the angle of the steering motor of the swerve module.
-   * @return the current angle of the steering motor, in degrees with no normalization.
-   * NOTE: In order for this function to work correctly, CANCODERS must utilize "boot to absolute value"
-   * boot strategy and be set to range 0 to 360
-  */
-  public double getAngle()
+/** 
+ * A getter for the angle of the steering motor of the swerve module.
+ * @return the current angle of the steering motor, in degrees with no normalization.
+ * NOTE: In order for this function to work correctly, CANCODERS must utilize "boot to absolute value"
+ * boot strategy and be set to range 0 to 360
+*/
+public double getAngle()
   { 
     return steeringEncoder.getPosition();
   } 
 
-  //Convert an angle in degrees to encoder counts (ticks) 
-  private static int AngleToEncoder(double deg)
+//Convert an angle in degrees to encoder counts (ticks) 
+private static int AngleToEncoder(double deg)
   {
       return (int)((double)deg / 360.0 * (double)SwerveConstants.ENCODER_COUNT);
   }
 
-  private static double AngleDelta(double current, double target)
+private static double AngleDelta(double current, double target)
   {
       if (current < 0)
       {
@@ -240,34 +243,28 @@ public class SwerveModule extends SubsystemBase
       double delta = target - current;
       return Math.IEEEremainder(delta, 360);
   }
-
+/**
+ * Calculate an offset for the Swerve Module and save it to flash. This offset
+ * will allow any direction to be set as the forward direction since encoders
+ * almost never tell the Module to point in the correct direction relative to 
+ * the robot. 
+ */
 public void normalizeModule() 
 {
-    System.out.println("Normalizing Modules...");
+    System.out.printf("Normalizing Module %d\n", steeringMotor.getDeviceID());
     offsets[steeringMotor.getDeviceID()-ENCODER_BASE] = getAngle();
     String prefKey = String.format("SwerveModule/Offset_%02d", steeringMotor.getDeviceID());
     Preferences.setDouble(prefKey, offsets[steeringMotor.getDeviceID()-ENCODER_BASE]);
 }
 
 /** 
- * Determine how far the drive motor has turned in meters at any given time. 
- * @return the instantaneous change in distance of the drive motor in meters
+ * Get the distance reported by the drive motor internal sensor and convert it to meters
+ * @return the distance traveled by the drive wheel in meters
  */ 
 public double getDistance() 
-    {  
-    // Determine the value of the current position of the drive motor
-    double current = driveMotor.getSelectedSensorPosition(); 
-    /* 
-     * Subtract the current position from the stored value for distance traveled to 
-     * get the difference between them for any given time. This should be the instantaneous distance
-     * traveled by the robot.
-    */
-    double delta = (current - distance); 
-    // Assign the current distance to the stored distance so that the stored distance is constantly updated  
-    distance = current; 
-    // Convert the instantaneous distance to meters from senor ticks (encoder counts)
-    return ticksToMeter(delta);
-    } 
+  {  
+    return ticksToMeter(driveMotor.getSensorCollection().getIntegratedSensorPosition());
+  } 
 
 /**
 * Set the drive motor of the Swerve Module to brake mode. "Brake Mode" means the motor will actively 
@@ -285,38 +282,49 @@ public void brakeMode()
  * counterclockwise when the motor is being commanded clockwise, then the motor and encoder are 
  * "out of phase". Employing this method should correct the issue. 
 */  
-  public void phaseSteeringMotor()
+public void phaseSteeringMotor()
     { 
       steeringMotor.setSensorPhase(true);
     }
 /**
- * Congfigure any constants that vary based on swerve module used. 
+ * Congfigure any settings that vary based on the type of swerve module used. 
+ * These settings include gear ratios and encoder internal configurations. 
  * @param moduleType A String name representing the module being used.
  */
-  public void setGearRatioDependentConstants(String moduleType)
+public void setModuleSettings(String moduleType)
   {
     switch(moduleType)
     {
-      case "geared":
+      case "geared flipped":
+      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_GEARED;
+      steeringMotor.setSensorPhase(true);
+      //The below settings are critical to correct normalization
+      steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
+      steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
       break; 
-      case "belted":
+      case "belted flipped":
+      System.out.printf("Setting Module %d to %s Belted Settings\n", steeringMotor.getDeviceID(), moduleType);
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_BELTED; 
+      steeringMotor.setSensorPhase(false);
+      //The below settings are critical to correct normalization
+      steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
+      steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
       break; 
       default:
-      gearRatio = 0; 
+      System.out.printf("Module %d not configured properly, check for possible spelling error in moduleType argument to constructor\n", steeringMotor.getDeviceID()); 
     }
   // A simple conversion formula to turn encoder velocity (sensor units/100ms) to
   // meters per second
   velocityMeters = 1 / SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * SwerveConstants.WHEEL_CIRCUMFERENCE * 1
   / gearRatio * SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
 
-  // A simple conversion formula to turn meters per second to encoder velocity
-  velocitySensor = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * 1 / SwerveConstants.WHEEL_CIRCUMFERENCE * gearRatio
-  * 1 / SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
+    // A simple conversion formula to turn meters per second to encoder velocity
+    velocitySensor = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * 1 / SwerveConstants.WHEEL_CIRCUMFERENCE * gearRatio
+    * 1 / SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
 
-  //Converts wheel rotations of the drive motor to sensor counts (ticks)
-  ticksPerRotation = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * gearRatio;
-  } 
+    //Converts wheel rotations of the drive motor to sensor counts (ticks)
+    ticksPerRotation = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * gearRatio;
+  }
   
 }//End class Swerve Module
