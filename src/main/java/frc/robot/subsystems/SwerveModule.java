@@ -33,6 +33,8 @@ public class SwerveModule extends SubsystemBase
     private final WPI_TalonFX steeringMotor; 
     private final CANCoder steeringEncoder;
 
+    boolean flipTarget;
+
      double velocityMeters;
      double ticksPerRotation; 
      double velocitySensor;  
@@ -198,7 +200,7 @@ public class SwerveModule extends SubsystemBase
         } 
         else 
           {
-            steeringMotor.set(ControlMode.MotionMagic, -target); 
+            steeringMotor.set(ControlMode.MotionMagic, flipTarget ? -target : target); 
             //driveMotor.set(ControlMode.Velocity, driveSpeed);   
             driveMotor.set(ControlMode.PercentOutput, driveSpeed);
           }
@@ -286,6 +288,7 @@ public void phaseSteeringMotor()
     { 
       steeringMotor.setSensorPhase(true);
     }
+
 /**
  * Congfigure any settings that vary based on the type of swerve module used. 
  * These settings include gear ratios and encoder internal configurations. 
@@ -302,14 +305,16 @@ public void setModuleSettings(String moduleType)
       //The below settings are critical to correct normalization
       steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
       steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
+      flipTarget = true;
       break; 
       case "belted flipped":
-      System.out.printf("Setting Module %d to %s Belted Settings\n", steeringMotor.getDeviceID(), moduleType);
+      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_BELTED; 
       steeringMotor.setSensorPhase(false);
       //The below settings are critical to correct normalization
       steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
       steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
+      flipTarget = false; 
       break; 
       default:
       System.out.printf("Module %d not configured properly, check for possible spelling error in moduleType argument to constructor\n", steeringMotor.getDeviceID()); 

@@ -26,7 +26,7 @@ public class SwerveDriveCommand extends CommandBase {
 
   @Override
   public void execute() {
-    driveBase.drive(getXSpeed.getAsDouble(), getYSpeed.getAsDouble(), getRotationSpeed.getAsDouble()*0.001, true);
+    driveBase.drive(getXSpeed.getAsDouble(), getYSpeed.getAsDouble(), getRotationSpeed.getAsDouble()*0.001, false);
   }
 
   @Override
