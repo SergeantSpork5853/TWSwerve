@@ -5,6 +5,7 @@ package frc.robot.subsystems;
 
 //CTRE dependencies
 import com.ctre.phoenix.motorcontrol.ControlMode;
+import com.ctre.phoenix.motorcontrol.InvertType;
 import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.StatusFrameEnhanced;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
@@ -308,13 +309,15 @@ public void setModuleSettings(String moduleType)
       flipTarget = true;
       break; 
       case "belted flipped":
-      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_BELTED; 
-      steeringMotor.setSensorPhase(false);
-      //The below settings are critical to correct normalization
+      steeringMotor.setSensorPhase(true);
+      steeringMotor.setInverted(true);
+      //The below settings are critical for correct normalization
       steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
       steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
+      steeringEncoder.configSensorDirection(false, 0);
       flipTarget = false; 
+      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       break; 
       default:
       System.out.printf("Module %d not configured properly, check for possible spelling error in moduleType argument to constructor\n", steeringMotor.getDeviceID()); 
