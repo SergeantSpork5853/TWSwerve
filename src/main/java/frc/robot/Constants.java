@@ -25,15 +25,9 @@ public final class Constants {
     public static final int DriverControllerPort = 0;
     public static final int OperatorControllerPort = 1;
   }
-  public static final SwerveDriveKinematics kinematicsGeared = new SwerveDriveKinematics(
+  public static final SwerveDriveKinematics kinematics = new SwerveDriveKinematics(
     new Translation2d(Units.inchesToMeters(-13), Units.inchesToMeters(-13)), // Front Left
     new Translation2d(Units.inchesToMeters(-13), Units.inchesToMeters(13)), // Front Right
     new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(-13)), // Back Left
     new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(13))); // Back Right
-
-    public static final SwerveDriveKinematics kinematicsBelted = new SwerveDriveKinematics(
-    new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(13)), // Front Left
-    new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(-13)), // Front Right
-    new Translation2d(Units.inchesToMeters(-13), Units.inchesToMeters(13)), // Back Left
-    new Translation2d(Units.inchesToMeters(-13), Units.inchesToMeters(-13))); // Back Right
 }
