@@ -53,16 +53,13 @@ public class SwerveDrive extends SubsystemBase
    * @param maxAngularSpeed The desired max angular speed of the robot in radians per second 
    * @param moduleType Pass in "geared" for wcp gear swerve modules or "belted" for belted modules
    * @param kinematics A kinematics object containing the locations of each swerve module relative to robot center 
-   * @param headingAdjustment An angle offset in degrees to be applied every gryo reset (including robot start up)
-   * @param debugMode If false, suppress non-essential SmartDashboard publications to save memory
    */
-  public SwerveDrive(double maxVelocity, double maxAngularSpeed, String moduleType, SwerveDriveKinematics kinematics, double headingAdjustment) 
+  public SwerveDrive(double maxVelocity, double maxAngularSpeed, String moduleType, SwerveDriveKinematics kinematics) 
     {
       this.maxAngularSpeed = maxAngularSpeed; 
       this.maxVelocity = maxVelocity; 
       this.moduleType = moduleType; 
       this.kinematics = kinematics; 
-      this.headingAdjustment = headingAdjustment;
       
       resetGyro(); 
 
@@ -247,4 +244,16 @@ public class SwerveDrive extends SubsystemBase
      System.out.println("DEBUG MODE ENABLED");
      debugMode = true;
    }
+
+  /**
+   * Set an offset to the robots heading in degrees. This is useful if the robots physical forward
+   * direction is not the direction of forward travel desired. This value will update when the gyro is 
+   * reset.
+   * @param adjustmentDeg an adjustment, in degrees, of the robots heading
+   */
+  public void setHeadingAdjustment(double adjustmentDeg)
+    {
+      headingAdjustment = adjustmentDeg; 
+      System.out.printf("Set an angle adjustment of %.2f degrees", adjustmentDeg);
+    }
 }

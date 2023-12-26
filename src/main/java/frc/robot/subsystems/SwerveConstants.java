@@ -29,7 +29,7 @@ public final class SwerveConstants
     public static final double MAXANGULARSPEED = 1;
     public static final double MAXANGULARACCELERARTION = 1; 
 
-    public static final double GEAR_RATIO_WCP_BELTED = 6.5; 
-    public static final double GEAR_RATIO_WCP_GEARED = 6.5; 
+    public static final double GEAR_RATIO_WCP_BELTED = 6.55; 
+    public static final double GEAR_RATIO_WCP_GEARED = 6.55; 
 
 }

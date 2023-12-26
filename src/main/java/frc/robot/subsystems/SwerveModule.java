@@ -175,7 +175,7 @@ public class SwerveModule extends SubsystemBase
          * the complementary case to the one above.
         */
         else if (delta < -90.0)
-          {//Possibly more useless code
+          {
             /* 
              * Change delta to a mirrored version of whatever it was before, effectively commanding the
              * steering motor to stay put.  
@@ -300,22 +300,35 @@ public void setModuleSettings(String moduleType)
     switch(moduleType)
     {
       case "geared flipped":
-      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_GEARED;
+      //Because gears rotate opposite each other, the sensor ends up out of phase with the motor. Phasing corrects this. 
       steeringMotor.setSensorPhase(true);
+      //The geared swerve steering motor does not need to be inverted
+      steeringMotor.setInverted(false);
       //The below settings are critical to correct normalization
       steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
       steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
+      //Counterclockwise should always be positive for the encoder
+      steeringEncoder.configSensorDirection(false, 0);
+      //Command a negative angle (in encoder counts) to the steering motor. Geared swerve needs a mirrored output.
       flipTarget = true;
+      System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       break; 
       case "belted flipped":
       gearRatio = SwerveConstants.GEAR_RATIO_WCP_BELTED; 
+      //Phasing the sensor allows for inversion of the motor without causing a conflict with the external sensor
       steeringMotor.setSensorPhase(true);
+      //The belted swerve steering motor needs to be inverted
       steeringMotor.setInverted(true);
       //The below settings are critical for correct normalization
       steeringEncoder.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
       steeringEncoder.configAbsoluteSensorRange(AbsoluteSensorRange.Unsigned_0_to_360);
+      //Counterclockwise should always be positive for the encoder
       steeringEncoder.configSensorDirection(false, 0);
+      /*
+       * Command a positive angle (in encoder counts) to the steering motor. For whatever reason
+       * belted swerve motionmagic control generates an oscillating output when commanded negatve.
+      */
       flipTarget = false; 
       System.out.printf("Setting Module %d to %s Settings\n", steeringMotor.getDeviceID(), moduleType);
       break; 
