@@ -38,7 +38,7 @@ public class SwerveModule extends SubsystemBase
 
      double velocityMeters;
      double ticksPerRotation; 
-     double velocitySensor;  
+     double velocityToEncoder;  
     //A value to store the stop angle passed in from the Swerve Module constructor
     private double stopAngle = 0;
     private double gearRatio; 
@@ -108,7 +108,7 @@ public class SwerveModule extends SubsystemBase
   * Returns the current velocity and rotation angle of the swerve module 
   * (in meters per second and radians respectively) as a SwerveModuleState
   */ 
-  public SwerveModuleState getState() 
+  public SwerveModuleState getSwerveModuleState() 
     { 
       final double angle = getAngle() - offsets[steeringMotor.getDeviceID()-ENCODER_BASE];
       return new SwerveModuleState(getVelocityMetersPerSecond(), Rotation2d.fromDegrees(angle)); 
@@ -142,7 +142,7 @@ public class SwerveModule extends SubsystemBase
         * This value is needed back in sensor units/100ms to command the falcon drive motor.
         * speedMetersPerSecond is used as a percent voltage value from -1 to 1 
        */
-      double driveSpeed = state.speedMetersPerSecond * velocitySensor;
+      double driveSpeed = state.speedMetersPerSecond * velocityToEncoder;
       //The raw, unormalized value of the encoder angle sensor
       final double absolute = getAngle(); 
       /* 
@@ -341,7 +341,7 @@ public void setModuleSettings(String moduleType)
   / gearRatio * SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
 
     // A simple conversion formula to turn meters per second to encoder velocity
-    velocitySensor = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * 1 / SwerveConstants.WHEEL_CIRCUMFERENCE * gearRatio
+    velocityToEncoder = SwerveConstants.DRIVE_MOTOR_ENCODER_RESOLUTION * 1 / SwerveConstants.WHEEL_CIRCUMFERENCE * gearRatio
     * 1 / SwerveConstants.TIME_CONSTANT_FOR_CONVERSION;
 
     //Converts wheel rotations of the drive motor to sensor counts (ticks)

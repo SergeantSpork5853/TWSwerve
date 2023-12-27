@@ -6,6 +6,8 @@ package frc.robot.subsystems;
 
 //Kauli Labs Dependencies
 import com.kauailabs.navx.frc.AHRS;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.util.HolonomicPathFollowerConfig;
 
 //WPILIB Dependencies
 import edu.wpi.first.math.geometry.Pose2d;
@@ -74,9 +76,40 @@ public class SwerveDrive extends SubsystemBase
       * for the distances of the Swerve Modules). 
       */
       odometry = new SwerveDriveOdometry(kinematics, Rotation2d.fromDegrees(getGyroAngle()), getSwerveModulePositions());
-      //Reset the robot pose every boot (TODO: necesary?)
-      resetPose();
           
+  }
+
+    /**
+   * The constructor for the swerve drive for pathplanner use
+   * @param maxVelocity The desired max velocity of the robot in meters per second
+   * @param maxAngularSpeed The desired max angular speed of the robot in radians per second 
+   * @param moduleType Pass in "geared" for wcp gear swerve modules or "belted" for belted modules
+   * @param kinematics A kinematics object containing the locations of each swerve module relative to robot center 
+   * @param config PID constants and other settings for autonomous driving
+   */
+  public SwerveDrive(double maxVelocity, double maxAngularSpeed, String moduleType, SwerveDriveKinematics kinematics, HolonomicPathFollowerConfig config) 
+    {
+      this.maxAngularSpeed = maxAngularSpeed; 
+      this.maxVelocity = maxVelocity; 
+      this.moduleType = moduleType; 
+      this.kinematics = kinematics; 
+      
+      resetGyro(); 
+
+      //Using the moduleType passed in to the constructor, set the appropriate settings for the modules used.
+      frontLeft.setModuleSettings(moduleType);
+      frontRight.setModuleSettings(moduleType);
+      backLeft.setModuleSettings(moduleType);
+      backRight.setModuleSettings(moduleType);  
+
+      /*
+      * Initialize the odometry (if this is done outside of the constructor it will pass garbage values 
+      * for the distances of the Swerve Modules). 
+      */
+      odometry = new SwerveDriveOdometry(kinematics, Rotation2d.fromDegrees(getGyroAngle()), getSwerveModulePositions());
+      
+      //A pathplanner AutoBuilder object for autonomous driving
+      AutoBuilder.configureHolonomic(this::getPose, this::resetPose, this::getChassisSpeeds, this::driveRobotOriented, config, this);
   }
 
   //Reset the gyro using NavX reset function and apply a user-specified adjustment to the angle
@@ -104,7 +137,7 @@ public class SwerveDrive extends SubsystemBase
       //Reset the odometry readings when reset odometry switch is pressed
       if(!resetOdometry.get())
         {
-          resetPose();
+          zeroPose();
         }
 
       if(debugMode)
@@ -120,6 +153,11 @@ public class SwerveDrive extends SubsystemBase
           SmartDashboard.putNumber("SwerveModuleDistanceFR", frontRight.getSwerveModulePosition().distanceMeters);
           SmartDashboard.putNumber("SwerveModuleDistanceBL", backLeft.getSwerveModulePosition().distanceMeters);
           SmartDashboard.putNumber("SwerveModuleDistanceBR", backRight.getSwerveModulePosition().distanceMeters);
+
+          SmartDashboard.putNumber("SwerveModuleVelocityFL", frontLeft.getSwerveModuleState().speedMetersPerSecond);
+          SmartDashboard.putNumber("SwerveModuleVelocityFR", frontRight.getSwerveModuleState().speedMetersPerSecond);
+          SmartDashboard.putNumber("SwerveModuleVelocityBL", backLeft.getSwerveModuleState().speedMetersPerSecond);
+          SmartDashboard.putNumber("SwerveModuleVelocityBR", backRight.getSwerveModuleState().speedMetersPerSecond);
   
           SmartDashboard.putNumber("SwerveModuleAngleFL", frontLeft.getSwerveModulePosition().angle.getDegrees());
           SmartDashboard.putNumber("SwerveModuleAngleFR", frontRight.getSwerveModulePosition().angle.getDegrees());
@@ -137,6 +175,13 @@ public class SwerveDrive extends SubsystemBase
     {
       drive(0.0, 0.0, 0.0, false);
     } 
+
+  public void driveRobotOriented(ChassisSpeeds robotRelativeSpeeds)
+  {
+
+    SwerveModuleState[] targetStates = kinematics.toSwerveModuleStates(robotRelativeSpeeds);
+    setModuleStates(targetStates);
+  }
 
   public void drive(double xSpeed, double ySpeed, double rotationSpeed, boolean fieldOriented)
     {
@@ -192,12 +237,31 @@ public class SwerveDrive extends SubsystemBase
         };
     }
 
-  public void resetPose()
+  public SwerveModuleState[] getSwerveModuleStates()
+  {
+    return new SwerveModuleState[] 
+        {
+          frontLeft.getSwerveModuleState(),
+          frontRight.getSwerveModuleState(),
+          backLeft.getSwerveModuleState(),
+          backRight.getSwerveModuleState()
+        };
+  }
+
+  public void zeroPose()
     {
       System.out.println("resetting pose");
       odometry.resetPosition(Rotation2d.fromDegrees(getGyroAngle()), getSwerveModulePositions(), new Pose2d(0.0, 0.0, Rotation2d.fromDegrees(getGyroAngle())));
     }
 
+  public void resetPose(Pose2d pose)
+  {
+    odometry.resetPosition(Rotation2d.fromDegrees(getGyroAngle()), getSwerveModulePositions(), pose);
+  }
+
+  public ChassisSpeeds getChassisSpeeds() {
+    return kinematics.toChassisSpeeds(getSwerveModuleStates());
+  }
   /*
    * Get the angle of the gyro. This angle is negated to reflect the fact that 
    * the code is expecting counterclockwise to be positive (critical for odometry).

@@ -7,7 +7,10 @@ package frc.robot;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.Preferences;
+
+import com.pathplanner.lib.util.HolonomicPathFollowerConfig;
+import com.pathplanner.lib.util.PIDConstants;
+import com.pathplanner.lib.util.ReplanningConfig;
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
  * numerical or boolean
@@ -30,4 +33,12 @@ public final class Constants {
     new Translation2d(Units.inchesToMeters(-13), Units.inchesToMeters(13)), // Front Right
     new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(-13)), // Back Left
     new Translation2d(Units.inchesToMeters(13), Units.inchesToMeters(13))); // Back Right
+
+    public static final HolonomicPathFollowerConfig config = new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
+    new PIDConstants(1.0, 0.0, 0.0), // Translation PID constants
+    new PIDConstants(1.0, 0.0, 0.0), // Rotation PID constants
+    4.5, // Max module speed, in m/s
+    0.4, // Drive base radius in meters. Distance from robot center to furthest module.
+    new ReplanningConfig() // Default path replanning config. See the API for the options here
+    );
 }
